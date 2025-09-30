@@ -7,6 +7,7 @@ import time
 # ---------- Settings ----------
 CAM_ID = 0
 BRUSH_THICKNESS = 7
+ERASER_THICKNESS = 50
 SAVE_DIR = "saved_drawings"
 # ------------------------------
 
@@ -14,25 +15,25 @@ mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 hands = mp_hands.Hands(max_num_hands=1, min_detection_confidence=0.7)
 
-# Define color palette (BGR format)
-colors = [
-    (0, 0, 255),     # Red
-    (0, 255, 0),     # Green
-    (255, 0, 0),     # Blue
-    (0, 255, 255),   # Yellow
-    (255, 0, 255),   # Magenta
-    (255, 255, 0),   # Cyan
-    (0, 0, 0),       # Black
-    (255, 255, 255)  # White (acts like eraser)
+# Color palette (BGR)
+tools = [
+    {"color": (0, 0, 255), "name": "RED"},
+    {"color": (0, 255, 0), "name": "GREEN"},
+    {"color": (255, 0, 0), "name": "BLUE"},
+    {"color": (0, 255, 255), "name": "YELLOW"},
+    {"color": (255, 0, 255), "name": "MAGENTA"},
+    {"color": (255, 255, 0), "name": "CYAN"},
+    {"color": (0, 0, 0), "name": "BLACK"},
+    {"color": (255, 255, 255), "name": "WHITE"},
+    {"color": None, "name": "ERASER"},      # Special tool
+    {"color": None, "name": "CLEAR ALL"}    # Special tool
 ]
 
-color_names = ["RED", "GREEN", "BLUE", "YELLOW", "MAGENTA", "CYAN", "BLACK", "WHITE"]
+# Default tool
+current_tool = tools[2]  # BLUE
+color = current_tool["color"]
 
-# default color
-color = colors[2]  # Blue
-color_name = "BLUE"
-
-# Prepare canvas and save dir
+# Prepare canvas
 cap = cv2.VideoCapture(CAM_ID)
 ret, frame = cap.read()
 if not ret:
@@ -41,26 +42,45 @@ h, w = frame.shape[:2]
 canvas = np.zeros((h, w, 3), dtype=np.uint8)
 
 os.makedirs(SAVE_DIR, exist_ok=True)
-
 prev_x, prev_y = None, None
 
 def draw_palette(img):
-    """Draws the color palette on top of the screen"""
-    box_size = 60
-    margin = 10
-    for i, c in enumerate(colors):
-        x1 = margin + i * (box_size + margin)
-        y1 = margin
-        x2 = x1 + box_size
-        y2 = y1 + box_size
-        cv2.rectangle(img, (x1, y1), (x2, y2), c, -1)
-        cv2.rectangle(img, (x1, y1), (x2, y2), (255, 255, 255), 2)
-    return box_size, margin
+    """Draws palette with color boxes and names"""
+    box_w, box_h = 80, 80
+    margin = 15
+    start_x = margin
+    y1, y2 = margin, margin + box_h
+
+    for i, tool in enumerate(tools):
+        x1 = start_x + i * (box_w + margin)
+        x2 = x1 + box_w
+
+        # Special tools
+        if tool["name"] == "ERASER":
+            cv2.rectangle(img, (x1, y1), (x2, y2), (200, 200, 200), -1)
+            cv2.putText(img, "E", (x1+20, y1+55), cv2.FONT_HERSHEY_SIMPLEX, 2, (0,0,0), 3)
+        elif tool["name"] == "CLEAR ALL":
+            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 0, 0), -1)
+            cv2.putText(img, "X", (x1+20, y1+55), cv2.FONT_HERSHEY_SIMPLEX, 2, (255,255,255), 3)
+        else:
+            cv2.rectangle(img, (x1, y1), (x2, y2), tool["color"], -1)
+
+        # Border highlight if selected
+        if tool == current_tool:
+            cv2.rectangle(img, (x1, y1), (x2, y2), (255, 255, 255), 4)
+        else:
+            cv2.rectangle(img, (x1, y1), (x2, y2), (255, 255, 255), 2)
+
+        # Tool name
+        cv2.putText(img, tool["name"], (x1, y2+25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2)
+
+    return box_w, box_h, margin
 
 print("Controls:")
-print(" - Draw: raise only index finger (point).")
-print(" - Change color: move fingertip into a color box at the top row.")
-print(" - Fist (all fingers down) = Clear canvas.")
+print(" - Draw: index finger only (point).")
+print(" - Select color/tool: move fingertip into a palette box.")
+print(" - Eraser: removes strokes.")
+print(" - CLEAR ALL: wipes full canvas.")
 print(" - Save: Press 's'. Quit: Press 'Esc'.")
 
 while True:
@@ -68,14 +88,14 @@ while True:
     if not ret:
         break
 
-    frame = cv2.flip(frame, 1)  # mirror image
+    frame = cv2.flip(frame, 1)
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = hands.process(rgb)
 
     gesture_text = ""
     drawing = False
 
-    box_size, margin = draw_palette(frame)
+    box_w, box_h, margin = draw_palette(frame)
 
     if results.multi_hand_landmarks:
         hand_landmarks = results.multi_hand_landmarks[0]
@@ -85,53 +105,47 @@ while True:
         def lm_to_px(idx):
             return int(lm[idx].x * w), int(lm[idx].y * h)
 
-        # fingers up/down detection
+        # Detect finger up/down
         tip_ids = [8, 12, 16, 20]
         fingers = []
         for tip in tip_ids:
-            if lm[tip].y < lm[tip-2].y:
-                fingers.append(1)
-            else:
-                fingers.append(0)
+            fingers.append(1 if lm[tip].y < lm[tip-2].y else 0)
 
         index_x, index_y = lm_to_px(8)
 
-        # Check if fingertip is in palette area
-        if index_y < box_size + margin:
-            for i, c in enumerate(colors):
-                x1 = margin + i * (box_size + margin)
-                y1 = margin
-                x2 = x1 + box_size
-                y2 = y1 + box_size
+        # Check palette selection
+        if index_y < box_h + margin:
+            for i, tool in enumerate(tools):
+                x1 = margin + i * (box_w + margin)
+                x2 = x1 + box_w
+                y1, y2 = margin, margin + box_h
                 if x1 < index_x < x2 and y1 < index_y < y2:
-                    color = c
-                    color_name = color_names[i]
-                    gesture_text = f"COLOR: {color_name}"
+                    current_tool = tool
+                    color = tool["color"]
+                    gesture_text = f"TOOL: {tool['name']}"
+                    if tool["name"] == "CLEAR ALL":
+                        canvas = np.zeros((h, w, 3), dtype=np.uint8)
+                    prev_x, prev_y = None, None
 
-        # Drawing gesture: only index up
+        # Drawing mode: index finger only
         elif fingers == [1, 0, 0, 0]:
-            drawing = True
-            gesture_text = f"DRAWING ({color_name})"
-            if prev_x is None and prev_y is None:
+            if current_tool["name"] == "ERASER":
+                cv2.circle(canvas, (index_x, index_y), ERASER_THICKNESS, (0,0,0), -1)
+                gesture_text = "ERASING"
+            else:
+                if prev_x is None and prev_y is None:
+                    prev_x, prev_y = index_x, index_y
+                cv2.line(canvas, (prev_x, prev_y), (index_x, index_y), color, BRUSH_THICKNESS)
                 prev_x, prev_y = index_x, index_y
-            cv2.line(canvas, (prev_x, prev_y), (index_x, index_y), color, BRUSH_THICKNESS)
-            prev_x, prev_y = index_x, index_y
-        # Fist = clear
-        elif fingers == [0, 0, 0, 0]:
-            canvas = np.zeros((h, w, 3), dtype=np.uint8)
-            prev_x, prev_y = None, None
-            gesture_text = "CLEAR CANVAS"
+                gesture_text = f"DRAWING ({current_tool['name']})"
         else:
             prev_x, prev_y = None, None
 
-    # Merge frame + canvas
     combined = cv2.addWeighted(frame, 0.5, canvas, 0.5, 0)
-
-    # Display gesture info
-    cv2.rectangle(combined, (0, h-40), (400, h), (0, 0, 0), -1)
+    cv2.rectangle(combined, (0, h-40), (400, h), (0,0,0), -1)
     cv2.putText(combined, f"{gesture_text}", (10, h-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 2)
 
-    cv2.imshow("Virtual Painter with Palette", combined)
+    cv2.imshow("Virtual Painter Pro", combined)
 
     key = cv2.waitKey(1) & 0xFF
     if key == 27:  # ESC
