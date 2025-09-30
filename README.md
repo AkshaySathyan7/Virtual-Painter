@@ -1,4 +1,4 @@
-# 🎨 Virtual Painter Pro
+# 🎨 Virtual Painter Pro (Hand Gesture Drawing)
 
 A fun **AI-powered air drawing app** using **Python, OpenCV, and MediaPipe**.  
 Control the brush with your **hand gestures** — no mouse or touchscreen needed!
@@ -7,8 +7,7 @@ Control the brush with your **hand gestures** — no mouse or touchscreen needed
 
 ## ✨ Features
 - Draw in the air using your **index finger** ✍️  
-- **Color Palette** with primary & extra colors (Red, Green, Blue, Yellow, Magenta, Cyan, Black, White)  
-- **Eraser Tool** 🧽 — erase parts of your drawing  
+- **Stylish Color Palette** with 3 main colors (Red, Green, Blue)  
 - **Clear Screen Tool** ❌ — instantly wipe the canvas  
 - **Save Drawing** (press `S`) to a `saved_drawings/` folder  
 - Smooth, real-time hand tracking with **MediaPipe**
@@ -32,5 +31,5 @@ _Add a screenshot or gif here after running the project._
 
 1. Clone the repo:
    ```bash
-   git clone https://github.com/your-username/virtual-painter-pro.git
-   cd virtual-painter-pro
+   git clone https://github.com/your-username/Virtual-Painter-Pro.git
+   cd Virtual-Painter-Pro
