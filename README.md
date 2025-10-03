@@ -31,5 +31,5 @@ _Add a screenshot or gif here after running the project._
 
 1. Clone the repo:
    ```bash
-   git clone https://github.com/your-username/Virtual-Painter-Pro.git
-   cd Virtual-Painter-Pro
+   git clone https://github.com/AkshaySathyan7/Virtual-Painter.git
+   cd Virtual-Painter
